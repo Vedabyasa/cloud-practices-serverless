@@ -1,0 +1,51 @@
+service: product-subscription-service
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  environment:
+    SUBSCRIPTIONS_TABLE: ${self:service}-subscriptions
+    EVENT_BUS_NAME: ${self:service}-event-bus
+
+functions:
+  subscribe:
+    handler: src/handlers/subscribe.handler
+    events:
+      - http:
+          path: subscribe
+          method: post
+  processSubscription:
+    handler: src/handlers/process.handler
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt:
+              - SubscriptionQueue
+              - Arn
+
+resources:
+  Resources:
+    SubscriptionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.SUBSCRIPTIONS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: email
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+    SubscriptionQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-queue
+
+    SubscriptionDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-dlq
